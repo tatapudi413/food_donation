@@ -1,0 +1,378 @@
+<!--
+  Food Donation Web App (single HTML file)
+  Features:
+  - Responsive donation form
+  - Client-side validation
+  - Save donations to localStorage (so refresh persists)
+  - List of donations with edit/delete and mark-picked-up
+  - Simple, clean styling
+  - Accessible labels and keyboard-friendly
+
+  To use: save this as `food-donation.html` and open in a browser.
+-->
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Food Donation App</title>
+  <style>
+    :root{
+      --bg:#f6f8fb; --card:#ffffff; --accent:#2b7a78; --muted:#6b7280; --success:#16a34a;
+      --danger:#ef4444; --glass: rgba(43,122,120,0.06);
+      font-family: Inter, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:linear-gradient(180deg,var(--bg),#eef3f6);color:#0f172a;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px}
+    .container{max-width:1100px;width:100%;display:grid;grid-template-columns:1fr 420px;gap:20px}
+    @media (max-width:980px){.container{grid-template-columns:1fr}}
+
+    header{grid-column:1/-1;display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    h1{font-size:20px;margin:0}
+    p.lead{margin:0;color:var(--muted);font-size:13px}
+
+    .card{background:var(--card);border-radius:12px;padding:18px;box-shadow:0 6px 20px rgba(15,23,42,0.06);}
+
+    form .row{display:flex;gap:10px}
+    .col{flex:1}
+    label{display:block;font-size:13px;margin-bottom:6px;color:#0f172a}
+    input[type="text"],input[type="tel"],input[type="date"],select,textarea,input[type="number"]{
+      width:100%;padding:10px;border-radius:8px;border:1px solid #e6e9ee;background:transparent;font-size:14px}
+    textarea{min-height:100px;resize:vertical}
+    .muted{color:var(--muted);font-size:13px}
+
+    .actions{display:flex;gap:10px;align-items:center;margin-top:12px}
+    button{background:var(--accent);color:white;padding:10px 14px;border-radius:10px;border:0;cursor:pointer;font-weight:600}
+    button.secondary{background:transparent;color:var(--accent);border:1px solid rgba(43,122,120,0.12)}
+    .small{font-size:13px;padding:8px 10px}
+
+    .donations-list{display:flex;flex-direction:column;gap:12px}
+    .donation-item{display:flex;gap:12px;align-items:flex-start;padding:12px;border-radius:10px;background:var(--glass);}
+    .donation-item h3{margin:0;font-size:15px}
+    .donation-meta{font-size:13px;color:var(--muted)}
+    .pill{background:#fff;padding:6px 8px;border-radius:999px;font-size:12px;border:1px solid rgba(0,0,0,0.06)}
+
+    .controls{margin-left:auto;display:flex;gap:8px}
+    .controls button{background:transparent;border:1px solid rgba(0,0,0,0.06);padding:6px;border-radius:8px}
+    .picked{border-color:var(--success);color:var(--success)}
+    .danger{border-color:var(--danger);color:var(--danger)}
+
+    .empty{color:var(--muted);text-align:center;padding:28px;border-radius:10px;background:linear-gradient(180deg,rgba(255,255,255,0.6),transparent);}
+
+    footer{grid-column:1/-1;text-align:center;margin-top:16px;color:var(--muted);font-size:13px}
+
+    /* small helpers */
+    .flex{display:flex;align-items:center;gap:8px}
+    .badge{padding:6px 8px;border-radius:8px;font-weight:600}
+    .note{font-size:13px;color:var(--muted);}
+
+    /* responsive tweaks */
+    @media (max-width:420px){.container{padding:0 6px}}
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>Food Donation App</h1>
+        <p class="lead">Create and manage food donation offers — sharing made simple.</p>
+      </div>
+      <div class="flex">
+        <div class="badge pill">Local Demo</div>
+      </div>
+    </header>
+
+    <!-- Form / Left column -->
+    <section class="card" aria-labelledby="donationFormTitle">
+      <h2 id="donationFormTitle" style="margin-top:0;font-size:16px">Donate food</h2>
+      <p class="muted">Fill details and press <strong>Offer donation</strong>. Data stays in your browser (localStorage).</p>
+
+      <form id="donationForm" novalidate>
+        <div class="row">
+          <div class="col">
+            <label for="name">Contact name</label>
+            <input id="name" name="name" type="text" required placeholder="Full name" />
+          </div>
+          <div class="col">
+            <label for="phone">Phone</label>
+            <input id="phone" name="phone" type="tel" placeholder="+91 98765 43210" pattern="[0-9+\- ]{7,20}" />
+          </div>
+        </div>
+
+        <label for="address">Pickup address</label>
+        <input id="address" name="address" type="text" placeholder="Street, city, landmark" required />
+
+        <div class="row" style="margin-top:10px">
+          <div class="col">
+            <label for="foodType">Food type</label>
+            <select id="foodType" name="foodType">
+              <option value="homecooked">Home-cooked</option>
+              <option value="restaurant">Restaurant / Catering</option>
+              <option value="packaged">Packaged / Canned</option>
+              <option value="bakery">Bakery</option>
+            </select>
+          </div>
+          <div class="col">
+            <label for="quantity">Quantity (approx)</label>
+            <input id="quantity" name="quantity" type="number" min="1" placeholder="e.g. 5 kg / 10 meals" />
+          </div>
+        </div>
+
+        <div class="row" style="margin-top:10px">
+          <div class="col">
+            <label for="expiry">Best before (date)</label>
+            <input id="expiry" name="expiry" type="date" />
+          </div>
+          <div class="col">
+            <label for="pickupDate">Pickup available on</label>
+            <input id="pickupDate" name="pickupDate" type="date" />
+          </div>
+        </div>
+
+        <label for="notes" style="margin-top:10px">Notes (allergies, veg/non-veg, packaging)</label>
+        <textarea id="notes" name="notes" placeholder="Any helpful notes..."></textarea>
+
+        <div class="actions">
+          <button id="submitBtn" type="submit">Offer donation</button>
+          <button id="clearBtn" type="button" class="secondary small">Clear form</button>
+          <div class="note" style="margin-left:auto">Saved locally. Use export/import to transfer.</div>
+        </div>
+      </form>
+
+      <hr style="margin:14px 0;border:none;border-top:1px solid #eef2f7">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <button id="exportBtn" class="small secondary" title="Export donations to a JSON file">Export</button>
+        <button id="importBtn" class="small secondary" title="Import donations from a JSON file">Import</button>
+        <input id="importFile" type="file" accept="application/json" style="display:none" />
+        <button id="clearAllBtn" class="small danger" style="border-color:rgba(239,68,68,0.12);">Clear all offers</button>
+      </div>
+    </section>
+
+    <!-- Right column: list of donations -->
+    <aside>
+      <div class="card">
+        <h2 style="margin-top:0;font-size:16px">Available donations</h2>
+        <p class="muted">Donations appear here. Click actions to manage each item.</p>
+
+        <div id="donations" class="donations-list" style="margin-top:12px">
+          <!-- donation items inserted here -->
+        </div>
+
+        <div id="emptyState" class="empty" style="display:none;margin-top:12px">
+          No donations yet — be the first to offer food to your community ❤️
+        </div>
+      </div>
+
+      <div class="card" style="margin-top:12px">
+        <h3 style="margin:0 0 8px 0">Quick tips</h3>
+        <ul style="margin:0;padding-left:18px;color:var(--muted)">
+          <li>Label veg/non-veg clearly.</li>
+          <li>Prefer sealed/packaged items for long distribution windows.</li>
+          <li>Provide accurate pickup times to avoid waste.</li>
+        </ul>
+      </div>
+    </aside>
+
+    <footer>Made with ♥ — Local demo. This page stores data in your browser only.</footer>
+  </div>
+
+  <script>
+    // Simple client-side app
+    const form = document.getElementById('donationForm');
+    const donationsEl = document.getElementById('donations');
+    const emptyState = document.getElementById('emptyState');
+    const submitBtn = document.getElementById('submitBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const exportBtn = document.getElementById('exportBtn');
+    const importBtn = document.getElementById('importBtn');
+    const importFile = document.getElementById('importFile');
+    const clearAllBtn = document.getElementById('clearAllBtn');
+
+    const STORAGE_KEY = 'food_donations_v1';
+
+    let donations = loadDonations();
+    render();
+
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const data = readForm();
+      if(!data.name || !data.address){
+        alert('Please provide name and pickup address.');
+        return;
+      }
+      // add id & createdAt
+      data.id = 'd_' + Date.now();
+      data.createdAt = new Date().toISOString();
+      data.status = 'available';
+
+      donations.unshift(data);
+      saveDonations();
+      render();
+      form.reset();
+      document.getElementById('name').focus();
+    });
+
+    clearBtn.addEventListener('click', ()=>form.reset());
+
+    exportBtn.addEventListener('click', ()=>{
+      const blob = new Blob([JSON.stringify(donations, null, 2)], {type:'application/json'});
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'donations.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    });
+
+    importBtn.addEventListener('click', ()=>importFile.click());
+    importFile.addEventListener('change', async (ev)=>{
+      const f = ev.target.files[0];
+      if(!f) return;
+      try{
+        const text = await f.text();
+        const parsed = JSON.parse(text);
+        if(!Array.isArray(parsed)) throw new Error('Invalid file format');
+        // merge imported donations (avoid id clashes by prefixing)
+        const imported = parsed.map(d=>({...d, id: 'imp_' + Date.now() + '_' + Math.random().toString(36).slice(2)}));
+        donations = imported.concat(donations);
+        saveDonations(); render();
+        alert('Imported ' + imported.length + ' donations.');
+      }catch(err){alert('Failed to import: ' + err.message)}
+      importFile.value = '';
+    });
+
+    clearAllBtn.addEventListener('click', ()=>{
+      if(!confirm('Remove all saved donations from this browser?')) return;
+      donations = [];
+      saveDonations(); render();
+    });
+
+    function readForm(){
+      return {
+        name: document.getElementById('name').value.trim(),
+        phone: document.getElementById('phone').value.trim(),
+        address: document.getElementById('address').value.trim(),
+        foodType: document.getElementById('foodType').value,
+        quantity: document.getElementById('quantity').value || null,
+        expiry: document.getElementById('expiry').value || null,
+        pickupDate: document.getElementById('pickupDate').value || null,
+        notes: document.getElementById('notes').value.trim() || null,
+      };
+    }
+
+    function render(){
+      donationsEl.innerHTML = '';
+      if(donations.length === 0){ emptyState.style.display = 'block'; return; }
+      emptyState.style.display = 'none';
+
+      for(const d of donations){
+        const item = document.createElement('div');
+        item.className = 'donation-item';
+
+        const left = document.createElement('div');
+        left.style.flex = '1';
+
+        const title = document.createElement('h3');
+        title.textContent = d.foodType.replace(/\b\w/g, s => s.toUpperCase()) + ' — ' + (d.quantity || 'Quantity not specified');
+
+        const meta = document.createElement('div');
+        meta.className = 'donation-meta';
+        const created = new Date(d.createdAt).toLocaleString();
+        meta.innerHTML = `<strong>${escapeHtml(d.name)}</strong> • ${escapeHtml(d.address)}<br/>${d.phone?escapeHtml(d.phone)+ ' • ' : ''}${created}${d.pickupDate? ' • Pickup: ' + escapeHtml(d.pickupDate):''}${d.expiry? ' • Best before: ' + escapeHtml(d.expiry):''}`;
+
+        if(d.notes){
+          const notes = document.createElement('div');
+          notes.style.marginTop = '8px';
+          notes.className = 'muted';
+          notes.textContent = d.notes;
+          left.appendChild(title);
+          left.appendChild(meta);
+          left.appendChild(notes);
+        }else{
+          left.appendChild(title);
+          left.appendChild(meta);
+        }
+
+        const controls = document.createElement('div');
+        controls.className = 'controls';
+
+        const mark = document.createElement('button');
+        mark.title = 'Mark as picked up/available';
+        mark.innerHTML = d.status === 'picked' ? 'Picked' : 'Mark Picked';
+        if(d.status === 'picked') mark.classList.add('picked');
+        mark.addEventListener('click', ()=>{
+          d.status = d.status === 'picked' ? 'available' : 'picked';
+          saveDonations(); render();
+        });
+
+        const edit = document.createElement('button');
+        edit.title = 'Edit donation';
+        edit.innerHTML = 'Edit';
+        edit.addEventListener('click', ()=>editDonation(d.id));
+
+        const del = document.createElement('button');
+        del.title = 'Delete donation';
+        del.className = 'danger';
+        del.innerHTML = 'Delete';
+        del.addEventListener('click', ()=>{
+          if(!confirm('Delete this donation?')) return;
+          donations = donations.filter(x=>x.id !== d.id);
+          saveDonations(); render();
+        });
+
+        controls.appendChild(mark);
+        controls.appendChild(edit);
+        controls.appendChild(del);
+
+        item.appendChild(left);
+        item.appendChild(controls);
+        donationsEl.appendChild(item);
+      }
+    }
+
+    function editDonation(id){
+      const d = donations.find(x=>x.id===id);
+      if(!d) return alert('Donation not found');
+      // populate form for quick edit
+      document.getElementById('name').value = d.name || '';
+      document.getElementById('phone').value = d.phone || '';
+      document.getElementById('address').value = d.address || '';
+      document.getElementById('foodType').value = d.foodType || 'homecooked';
+      document.getElementById('quantity').value = d.quantity || '';
+      document.getElementById('expiry').value = d.expiry || '';
+      document.getElementById('pickupDate').value = d.pickupDate || '';
+      document.getElementById('notes').value = d.notes || '';
+
+      // remove original and let user re-submit
+      donations = donations.filter(x=>x.id!==id);
+      saveDonations(); render();
+      window.scrollTo({top:0,behavior:'smooth'});
+      document.getElementById('name').focus();
+    }
+
+    function saveDonations(){
+      try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(donations)); }catch(e){ console.warn('Storage failed', e); }
+    }
+
+    function loadDonations(){
+      try{
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if(!raw) return [];
+        return JSON.parse(raw) || [];
+      }catch(e){ return [] }
+    }
+
+    // small util to escape HTML inside text nodes
+    function escapeHtml(str){
+      if(!str) return '';
+      return String(str).replace(/[&<>"']/g, function(s){
+        return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[s];
+      });
+    }
+
+    // initial demo data if empty — optional, uncomment to inject
+    // if(donations.length===0){ donations.push({id:'demo1',name:'Ravi',phone:'+91 98xxxx',address:'MG Road, City',foodType:'restaurant',quantity:'20 meals',notes:'Keep warm',createdAt:new Date().toISOString(),status:'available'}); saveDonations(); }
+  </script>
+</body>
+</html>
+
